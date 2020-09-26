@@ -1,0 +1,125 @@
+setwd('C:/Users/anila/OneDrive/Desktop/Advanced_Econometrics/Project')
+
+Continents <- read.csv('Progress - Continents.csv')
+GDP <- read.csv('Progress - GDP Per Capita PPP.csv') #fix data set - year can't be on the x axis
+Development <- read.csv('Progress - Human Development.csv')
+IntAccess <- read.csv('Progress - Internet Access as % of population.csv')
+PressFreedom <- read.csv('Progress - Press Freedom Index.csv')
+Pop <- read.csv('Progress - Population.csv')
+
+library(panelr)
+
+library(reshape2)
+
+# use melt() to re-format data structure: 
+names(GDP)[1] <- "Country.Name"
+PPP <- melt(data=GDP, id=c('Country.Name','Country.Code','Series.Name','Series.Code'), 
+            variable.name='Year', value.name='GDP per Capita (PPP)')
+
+Human <- melt(data = Development, id=c('Country.Name', 'Country.Code'), variable.name ='Year', value.name = 'Human Development')
+
+Internet <- melt(data=IntAccess, id=c('Country.Name','Country.Code', 'Indicator.Name', 'Indicator.Code'), 
+                 variable.name='Year', value.name='Internet.Access')
+
+Press <- melt(data=PressFreedom, id=c('Country.Code','Country.Name', 'Indicator.Id', 'Indicator', 'Subindicator.Type'), 
+              variable.name='Year', value.name='Press.Freedom')
+names(Pop)[1] <- "Country.Name"
+Popul <- melt(data=Pop, id=c('Country.Code','Country.Name', 'Indicator.Name', 'Indicator.Code'), 
+              variable.name='Year', value.name='Population')
+
+
+# change year variable
+PPP$Year = gsub('X', '', PPP$Year)
+Human$Year = gsub('X', '', Human$Year)
+Internet$Year <- gsub('X', '', Internet$Year)
+Press$Year <- gsub('X', '', Press$Year)
+Popul$Year <- gsub('X', '', Popul$Year)
+
+# Total internet access calculation
+InternetTotal <- Internet[6]*Popul[6]/100
+Internet <- data.frame(Internet, InternetTotal)
+
+Internet <- within(Internet, rm("Internet.Access"))
+
+# change names in Continents data
+names(Continents)[2] <- "Country.Code"
+names(Continents)[1] <- "Region.Name"
+
+
+
+# merge and clean dataframes
+newdata <- merge(PPP,Human, by=c('Country.Code','Year'))
+newdata2 <- merge(newdata,Continents, by='Country.Code')
+newdata3 <- merge(newdata2,Internet, by=c('Year', 'Country.Code'))
+
+newdata4 <- merge(newdata3,Press, by=c('Year', 'Country.Code'))
+
+
+data <- within(newdata4, rm("Country.Name.x", "Country.Name.x","Indicator.Id", "Country.Name.y", "Country.Name.y", "Indicator",
+                            "Series.Name", "Series.Code", "Subindicator.Type" ))
+data <- within(data, rm("Country.Name.x", "Country.Name.y" ))
+data <- within(data, rm("Indicator.Name", "Indicator.Code" ))
+
+# change names in final data
+names(data)[3] <- "GDP"
+names(data)[4] <- "Human.Development"
+names(data)[6] <- "Country.Name"
+
+data$'GDP' <- as.numeric(data$'GDP')
+data$'Human.Development' <- as.numeric(data$'Human.Development')
+
+# Dummies
+library(dummies)
+dummy(data$Region.Name, sep = ".")
+
+# Analysis
+library(plm)
+
+# Panel Data Analysis
+
+names(data)[7] <- "Internet.Access"
+
+fit <- lm(Internet.Access ~ GDP+Human.Development+Press.Freedom, data=data)
+summary(fit)
+
+fit.p <- plm(Internet.Access ~ GDP+Human.Development+Press.Freedom, data=data, index = c('Country.Name', 'Year'), model='pooling')
+summary(fit.p)
+
+fit.re <- plm(Internet.Access ~ GDP + Human.Development+Press.Freedom, data=data, index = c('Country.Name','Year'), model ='random')
+summary(fit.re)
+
+
+#Two-way models, default is spatial 
+fit.2fe <- plm(Internet.Access ~ GDP + Human.Development+Press.Freedom, data=data, index = c('Country.Name','Year'), effect='twoways', model='within')
+summary(fit.2fe)
+summary(fixef(fit.2fe))
+summary(fixef(fit.2fe, effect='time'))
+
+
+# Year Random effects
+fit.tfe2 <- plm(Internet.Access ~ GDP+Human.Development+Press.Freedom+Region.Name, data=data, index = c('Country.Name','Year'), effect='time', model='random')
+summary(fit.tfe2)
+
+# Hausman Test
+phtest(fit.re, fit.2fe)
+# null hypothesis is rejected, we should use fixed effect model
+
+# Region Variables
+
+fit <- lm(Internet.Access ~ GDP+Human.Development+Press.Freedom + Region.Name, data=data)
+summary(fit)
+
+fit.re <- plm(Internet.Access ~ GDP + Human.Development+Press.Freedom + Region.Name, data=data, index = c('Country.Name','Year'), model ='random')
+summary(fit.re)
+
+
+#Two-way models, default is spatial 
+fit.2fe <- plm(Internet.Access ~ GDP + Human.Development+Press.Freedom, data=data, index = c('Country.Name','Year'), effect='twoways', model='within')
+summary(fit.2fe)
+summary(fixef(fit.2fe))
+summary(fixef(fit.2fe, effect='time'))
+
+
+# Hausman Test
+phtest(fit.re, fit.2fe)
+# null hypothesis is rejected, we should use fixed effects model
