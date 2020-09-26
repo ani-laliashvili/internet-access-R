@@ -1,4 +1,4 @@
-setwd('C:/Users/anila/OneDrive/Desktop/Advanced_Econometrics/Project')
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path ))
 
 Continents <- read.csv('Progress - Continents.csv')
 GDP <- read.csv('Progress - GDP Per Capita PPP.csv') #fix data set - year can't be on the x axis
